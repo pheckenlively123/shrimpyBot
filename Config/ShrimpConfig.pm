@@ -76,6 +76,11 @@ sub getConfig {
 	$rv->{$kidName} = $kidValue;
     }
 
+    for my $sp ( qw / bearIgnoreList bullIgnoreList / ) {
+	my @ignoreList = split ( /,/, $rv->{$sp} );
+	$rv->{$sp} = \@ignoreList;
+    }
+
     return $rv;
 }
 
