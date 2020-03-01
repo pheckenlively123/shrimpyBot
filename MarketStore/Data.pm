@@ -63,6 +63,9 @@ EOF
 	confess "Failed to load DDL.\n";
     }
 
+    # I think I may need another table to track state for things like
+    # warm up delay.  Still mulling this one through...
+
     # See how performance goes on the queries, before we add indexes.
 }
 
@@ -117,7 +120,8 @@ select
     longEmaUsd,
     shortEmaBtc,
     longEmaBtc,
-    lastUpdated
+    bullStatusUsd,
+    bullStatusBtc
 from 
     ticker 
 where 
@@ -135,7 +139,8 @@ EOF
 	longEmaUsd 
 	shortEmaBtc 
 	longEmaBtc
-        lastUpdated
+        bullStatusUsd
+        bullStatusBtc
 	/;
     
     my $fnum = 0;
@@ -148,10 +153,12 @@ EOF
 
     my $updateEmaSql =<< "EOF";
 update ticker set 
-    shortEmaUsd = ?,
-    longEmaUsd  = ?,
-    shortEmaBtc = ?,
-    longEmaBtc  = ?
+    shortEmaUsd   = ?,
+    longEmaUsd    = ?,
+    shortEmaBtc   = ?,
+    longEmaBtc    = ?,
+    bullStatusUsd = ?,
+    bullStatusBtc = ?
 where
     exchange = ? 
     and name = ?
@@ -165,17 +172,150 @@ EOF
 
 	$sthPrices->execute ( $exchange, $res->{name} );
 
-	# Later on, we are going to delete rows to get back under the
+	# Later on, we are going to delete rows to get back to the
 	# maxHistory configuration parameter, so the entire result set
 	# should always be relatively modest in size.
 	my $prListRef = $sthPrices->fetchall_arrayref;
 
+	# Using the for loop to get easy access to the previous EMA.
 	for ( my $i = 0 ; $i <= $#{$prListRef} ; $i++ ) {
 
-	    my $shortWeight = 2 / ( $self->{conf}->{shortEma} + 1 );
-	    my $longWeight = 2 / ( $self->{conf}->{longEma} + 1 );
+	    my $sw = 2 / ( $self->{conf}->{shortEma} + 1 );
+	    my $lw = 2 / ( $self->{conf}->{longEma} + 1 );
+
+	    if ( $i == 0 ) {
+
+		my $updateFlagZero = 0;
+		
+		if ( !defined ( $prListRef->[$i]->[$nm{shortEmaUsd}] ) ) {
+		    $prListRef->[$i]->[$nm{shortEmaUsd}] = 
+			$prListRef->[$i]->[$nm{priceUsd}];
+		    $updateFlagZero = 1;
+		}
+
+		if ( !defined ( $prListRef->[$i]->[$nm{longEmaUsd}] ) ) {
+		    $prListRef->[$i]->[$nm{longEmaUsd}] = 
+			$prListRef->[$i]->[$nm{priceUsd}];
+		    $updateFlagZero = 1;
+		}
+
+		if ( !defined ( $prListRef->[$i]->[$nm{shortEmaBtc}] ) ) {
+		    $prListRef->[$i]->[$nm{shortEmaBtc}] = 
+			$prListRef->[$i]->[$nm{priceBtc}];
+		    $updateFlagZero = 1;		    
+		}
+		
+		if ( !defined ( $prListRef->[$i]->[$nm{longEmaBtc}] ) ) {
+		    $prListRef->[$i]->[$nm{longEmaBtc}] = 
+			$prListRef->[$i]->[$nm{priceBtc}];
+		    $updateFlagZero = 1;
+		}
+
+		if ( !defined ( $prListRef->[$i]->[$nm{bullStatusUsd}] ) ) {
+		    if ( $prListRef->[$i]->[$nm{shortEmaUsd}] 
+			 > $prListRef->[$i]->[$nm{longEmaUsd}] ) {
+			$prListRef->[$i]->[$nm{bullStatusUsd}] = 1;
+		    } else {
+			$prListRef->[$i]->[$nm{bullStatusUsd}] = 0;
+		    }
+		    $updateFlagZero = 1;
+		}
+
+		if ( !defined ( $prListRef->[$i]->[$nm{bullStatusBtc}] ) ) {
+		    if ( $prListRef->[$i]->[$nm{shortEmaBtc}]
+			 > $prListRef->[$i]->[$nm{longEmaBtc}] ) {
+			$prListRef->[$i]->[$nm{bullStatusBtc}] = 1;
+		    } else {
+			$prListRef->[$i]->[$nm{bullStatusBtc}] = 0;
+		    }
+		    $updateFlagZero = 1;
+		}
+
+		# Save what we have so far back into the database, if
+		# there are changes.
+		if ( $updateFlagZero ) { 
+		    $sthUpdateEma->execute (
+			$prListRef->[$i]->[$nm{shortEmaUsd}],
+			$prListRef->[$i]->[$nm{longEmaUsd}],
+			$prListRef->[$i]->[$nm{shortEmaBtc}],
+			$prListRef->[$i]->[$nm{longEmaBtc}],
+			$prListRef->[$i]->[$nm{bullStatusUsd}],
+			$prListRef->[$i]->[$nm{bullStatusBtc}],
+			$exchange,
+			$res->{name},
+			$prListRef->[$i]->[$nm{lastUpdated}] );
+		    
+		}
+
+		# Dislike nested if-than-else structures...
+		next;		    
+	    }
+
+	    # Only perform the update, if there is something new.
+	    my $updateFlag = 0;
 	    
-	    print '';
+	    if ( !defined ( $prListRef->[$i]->[$nm{shortEmaUsd}] ) ) {
+		$prListRef->[$i]->[$nm{shortEmaUsd}] = 
+		    ( $prListRef->[$i]->[$nm{priceUsd}] * $sw )
+		    + ( $prListRef->[$i-1]->[$nm{shortEmaUsd}] * ( $sw - 1 ) );
+		$updateFlag = 1;
+	    }
+	    
+	    if ( !defined ( $prListRef->[$i]->[$nm{longEmaUsd}] ) ) {
+		$prListRef->[$i]->[$nm{longEmaUsd}] =
+		    ( $prListRef->[$i]->[$nm{priceUsd}] * $lw )
+		    + ( $prListRef->[$i-1]->[$nm{longEmaUsd}] * ( $lw - 1 ) );
+		$updateFlag = 1;
+	    }
+	    
+	    if ( !defined ( $prListRef->[$i]->[$nm{shortEmaBtc}] ) ) {
+		$prListRef->[$i]->[$nm{shortEmaBtc}] = 
+		    ( $prListRef->[$i]->[$nm{priceBtc}] * $sw )
+		    + ( $prListRef->[$i-1]->[$nm{shortEmaBtc}] * ( $sw - 1 ) );
+		$updateFlag = 1;
+	    }
+	    
+	    if ( !defined ( $prListRef->[$i]->[$nm{longEmaBtc}] ) ) {
+		$prListRef->[$i]->[$nm{longEmaBtc}] = 
+		    ( $prListRef->[$i]->[$nm{priceBtc}] * $lw )
+		    + ( $prListRef->[$i-1]->[$nm{longEmaBtc}] * ( $lw - 1 ) );
+		$updateFlag = 1;
+	    }
+
+	    if ( !defined ( $prListRef->[$i]->[$nm{bullStatusUsd}] ) ) {
+		if ( $prListRef->[$i]->[$nm{shortEmaUsd}] 
+		     > $prListRef->[$i]->[$nm{longEmaUsd}] ) {
+		    $prListRef->[$i]->[$nm{bullStatusUsd}] = 1;
+		} else {
+		    $prListRef->[$i]->[$nm{bullStatusUsd}] = 0;
+		}
+		$updateFlag = 1;
+	    }
+	    
+	    if ( !defined ( $prListRef->[$i]->[$nm{bullStatusBtc}] ) ) {
+		if ( $prListRef->[$i]->[$nm{shortEmaBtc}]
+		     > $prListRef->[$i]->[$nm{longEmaBtc}] ) {
+		    $prListRef->[$i]->[$nm{bullStatusBtc}] = 1;
+		} else {
+		    $prListRef->[$i]->[$nm{bullStatusBtc}] = 0;
+		}
+		$updateFlag = 1;
+	    }	    
+	    
+	    # Save what we have so far back into the database, if
+	    # there are updates.
+	    if ( $updateFlag ) {
+		$sthUpdateEma->execute (
+		    $prListRef->[$i]->[$nm{shortEmaUsd}],
+		    $prListRef->[$i]->[$nm{longEmaUsd}],
+		    $prListRef->[$i]->[$nm{shortEmaBtc}],
+		    $prListRef->[$i]->[$nm{longEmaBtc}],
+		    $prListRef->[$i]->[$nm{bullStatusUsd}],
+		    $prListRef->[$i]->[$nm{bullStatusBtc}],
+		    $exchange,
+		    $res->{name},
+		    $prListRef->[$i]->[$nm{lastUpdated}] );
+	    }
 	}
     }
 }
