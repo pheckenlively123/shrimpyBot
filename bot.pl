@@ -38,13 +38,11 @@ foreach my $op ( qw / c / ) {
     }
 }
 
-# Now that we have the config file, instantiate the config object.
-$confParse = Config::ShrimpConfig->new ( $opts->{c} );
-
 ### Subroutine Section ###
 
 ### Main Section ###
 
+$confParse = Config::ShrimpConfig->new ( $opts->{c} );
 $conf = $confParse->getConfig ();
 $mark = MarketStore::Data->new ( $conf );
 $apiWrap = Shrimpy::ApiWrap->new ( $conf );
