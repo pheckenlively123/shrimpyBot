@@ -116,4 +116,36 @@ sub getTicker {
     return $rv;
 }
 
+sub getAllPortfolios {
+    my $self = shift;
+    my $id = shift;
+
+    my $uriPath = sprintf "%s/accounts/%s/portfolios", $self->{conf}->{apiBasePath}, $id;
+
+    my $found = $self->_standardGet ( $uriPath );
+
+    my $rv = {};
+    
+    # Only return the bull and bear portfolios.
+    foreach my $port ( @{$found} ) {
+
+	if ( defined ( $rv->{bear} )
+	     && defined ( $rv->{bull} ) ) {
+	    last;
+	}
+	
+	if ( $port->{name} =~ /$self->{conf}->{bearSuffix}$/i ) {
+	    $rv->{bear} = $port;
+	    next;
+	}
+	
+	if ( $port->{name} =~ /$self->{conf}->{bullSuffix}$/i ) {
+	    $rv->{bull} = $port;
+	    next;
+	}
+    }
+
+    return $rv;
+}
+    
 1;

@@ -57,6 +57,34 @@ foreach my $acc ( @{$accountListRef} ) {
     $mark->loadTicker ( $exName, $tick );
     $mark->updateEma ( $exName );
     $mark->trimHistory ( $exName );
+
+    ### ToDo: Add warm up delay support.
+
+    if ( $acc->{isRebalancing} ) {
+	# Skip making changes in strategy, if rebalancing is taking
+	# place.  (Yes...I know this could be stale information by the
+	# time I act on it...)
+	next;
+    }
+
+    my $port = $apiWrap->getAllPortfolios ( $acc->{id} );
+
+    if ( defined ( $port->{bear}->{active} )
+	 && $port->{bear}->{active} ) {
+	
+	print "Bear mode currently engaged.\n";
+	
+    } elsif ( defined ( $port->{bull}->{active} )
+	      && $port->{bull}->{active} ) {
+
+	print "Bull mode currently engaged.\n";
+
+    } else {
+	confess "Neither bear nor bull modes appear to be active.\n";
+    }
+	
+    print '';
+    
 }
 
 print '';
