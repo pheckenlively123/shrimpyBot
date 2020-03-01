@@ -186,6 +186,11 @@ EOF
 	    if ( $i == 0 ) {
 
 		my $updateFlagZero = 0;
+
+		# Initialize the EMA columns with the current price,
+		# since that is all we have.  Once the warm up delay
+		# is passed, we should have converged to the actual
+		# EMAs.
 		
 		if ( !defined ( $prListRef->[$i]->[$nm{shortEmaUsd}] ) ) {
 		    $prListRef->[$i]->[$nm{shortEmaUsd}] = 
