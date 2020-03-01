@@ -56,6 +56,7 @@ foreach my $acc ( @{$accountListRef} ) {
     my $tick = $apiWrap->getTicker ( $exName );
     $mark->loadTicker ( $exName, $tick );
     $mark->updateEma ( $exName );
+    $mark->trimHistory ( $exName );
 }
 
 print '';

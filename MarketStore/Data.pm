@@ -325,4 +325,42 @@ EOF
     }
 }
 
+# Clean up the history, so we don't keep it indefinitely.
+sub trimHistory {
+    my $self = shift;
+    my $exchange = shift;
+
+    my $sqlName =<< "EOF";
+select distinct name from ticker where exchange = ?
+EOF
+
+    my $sthName = $self->{dbh}->prepare ( $sqlName );
+
+    my $sqlAllName =<< "EOF";
+select lastUpdated from ticker where exchange = ? and name = ?
+order by lastUpdated
+EOF
+
+    my $sthAllName = $self->{dbh}->prepare ( $sqlAllName );
+
+    my $sqlDel =<< "EOF";
+delete from ticker where exchange = ? and name = ? and lastUpdated = ?
+EOF
+
+    my $sthDel = $self->{dbh}->prepare ( $sqlDel );
+    
+    $sthName->execute ( $exchange );
+    foreach my $hr ( $sthName->fetchrow_hashref ) {
+	
+	$sthAllName->execute ( $exchange, $hr->{name} );
+	my $alr = $sthAllName->fetchall_arrayref;
+
+	while ( $#{$alr} >= ( $self->{conf}->{maxHistory} - 1) ) {
+	    my $row = shift ( @{$alr} );
+
+	    $sthDel->execute ( $exchange, $hr->{name}, $row->[0] );
+	}
+    }
+}
+
 1;
