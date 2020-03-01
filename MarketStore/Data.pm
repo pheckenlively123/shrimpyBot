@@ -25,6 +25,9 @@ sub _initialize {
 
     $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$self->{conf}->{dbFile}",
 				"","");
+
+    # Safe to run the DDL load every time, because we are using the
+    # "if not exists" syntax.
     $self->loadDDL ();
 }
 
@@ -120,7 +123,8 @@ where
     exchange = ? and name = ?
 order by lastUpdated
 EOF
-    
+
+    # Define a helper hash to help make things more readable below.
     my %nm = ();
     my @fieldList = qw /
 	priceUsd  
