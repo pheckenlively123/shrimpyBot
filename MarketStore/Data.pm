@@ -116,7 +116,8 @@ select
     shortEmaUsd,
     longEmaUsd,
     shortEmaBtc,
-    longEmaBtc
+    longEmaBtc,
+    lastUpdated
 from 
     ticker 
 where 
@@ -134,6 +135,7 @@ EOF
 	longEmaUsd 
 	shortEmaBtc 
 	longEmaBtc
+        lastUpdated
 	/;
     
     my $fnum = 0;
@@ -144,14 +146,34 @@ EOF
     
     my $sthPrices = $self->{dbh}->prepare ( $sqlPrices );
 
+    my $updateEmaSql =<< "EOF";
+update ticker set 
+    shortEmaUsd = ?,
+    longEmaUsd  = ?,
+    shortEmaBtc = ?,
+    longEmaBtc  = ?
+where
+    exchange = ? 
+    and name = ?
+    and lastUpdated = ?
+EOF
+
+    my $sthUpdateEma = $self->{dbh}->prepare ( $updateEmaSql );
+    
     $sthName->execute ( $exchange );
     foreach my $res ( $sthName->fetchrow_hashref ) {
 
 	$sthPrices->execute ( $exchange, $res->{name} );
-	
+
+	# Later on, we are going to delete rows to get back under the
+	# maxHistory configuration parameter, so the entire result set
+	# should always be relatively modest in size.
 	my $prListRef = $sthPrices->fetchall_arrayref;
 
 	for ( my $i = 0 ; $i <= $#{$prListRef} ; $i++ ) {
+
+	    my $shortWeight = 2 / ( $self->{conf}->{shortEma} + 1 );
+	    my $longWeight = 2 / ( $self->{conf}->{longEma} + 1 );
 	    
 	    print '';
 	}
