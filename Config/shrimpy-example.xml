@@ -3,23 +3,27 @@
   <apiBaseUrl>https://api.shrimpy.io</apiBaseUrl>
   <!-- API base path -->
   <apiBasePath>/v1</apiBasePath>
-  <!-- Your API key goes in the field below. -->
-  <apiKey>YourKeyGoesHere</apiKey>
-  <!-- Your API secret goes in the field below. -->
-  <apiSecret>YourKeyGoesHere</apiSecret>
-  <!-- The field below is the threshold for switching from bear
-       profile to bull profile. -->
-  <endBear>60</endBear>
-  <!-- The field below is the threshold for switching from bull
-       profile to bear profile. -->
-  <startBear>30</startBear>
   <!-- This is the number of micro seconds to wait before each REST
        call.  This prevents us from calling the API too fast. -->
   <restApiDelay>100000</restApiDelay>
+  <!-- Your API key goes in the field below. -->
+  <apiKey>YourApiKeyGoesHere</apiKey>
+  <!-- Your API secret goes in the field below. -->
+  <apiSecret>YourApiSecretGoesHere</apiSecret>
+  <!-- If the bear profile reaches this threshold, switch to
+       bear. This will likely mean that all of the crypto markets are
+       in free fall. -->
+  <startBear>100</startBear>
+  <!-- If the bear profile reaches this threshold, switch back to bull. -->
+  <endBear>60</endBear>
   <!-- Suffix of the portfolio to use when we go into bear mode. -->
-  <holdSuffix>BEAR</holdSuffix>
+  <bearSuffix>BEAR</bearSuffix>
   <!-- Suffix of the portfolio to use when we go into bull mode. -->
-  <tradeSuffix>BULL</tradeSuffix>
+  <bullSuffix>BULL</bullSuffix>
+  <!-- Comma delimited list of symbols to ignore in the bear analysis. -->
+  <bearIgnoreList>BTC</bearIgnoreList>
+    <!-- Comma delimited list of symbols to ignore in the bull analysis. -->
+  <bullIgnoreList>USDT</bullIgnoreList>
   <!-- Location of the SQLite data file. -->
   <dbFile>/home/patrickheckenlively/Projects/shrimpyBot/MarketStore/markets.db</dbFile>
   <!-- Short term EMA for Bull/Bear analysis. -->
