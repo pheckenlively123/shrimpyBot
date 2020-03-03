@@ -19,7 +19,7 @@
   <!-- Suffix of the portfolio to use when we go into bear mode. -->
   <bearSuffix>BEAR</bearSuffix>
   <!-- Suffix of the portfolio to use when we go into bull mode. -->
-  <bullSuffix>BULL</bullSuffix>
+  <bullSuffix>HYBRID</bullSuffix>
   <!-- Comma delimited list of symbols to ignore in the bear analysis. -->
   <bearIgnoreList>BTC</bearIgnoreList>
     <!-- Comma delimited list of symbols to ignore in the bull analysis. -->
@@ -32,4 +32,10 @@
   <longEma>26</longEma>
   <!-- How many rows of history to keep for each coin for each exchange. -->
   <maxHistory>1000</maxHistory>
+  <!-- Put the frequency with which this gets run by cron below.  This
+       is used for warmup detection. -->
+  <cronInterval>10</cronInterval>
+  <!-- Warm up delay.  If warm up is needed, wait this many
+       executions, before making trading decisions. -->
+  <warmUpDelay>100</warmUpDelay>
 </config>
