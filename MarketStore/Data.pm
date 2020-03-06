@@ -74,6 +74,19 @@ sub loadTicker {
     my $exchange = shift;
     my $ticker = shift;
 
+    # Start by collecting a list of the known names in the database
+    # for this exchange.  Use this for gap analysis later.
+    my $symSql =<< "EOF";
+select distinct symbol from ticker where exchange = ?
+EOF
+
+    my $symSth = $self->{dbh}->prepare ( $symSql );
+    $symSth->execute ( $exchange );
+    my $symCap = {};
+    while ( my $rec = $symSth->fetchrow_hashref ) {
+	$symCap->{$rec->{symbol}} = 0;
+    }
+    
     my $sql =<< "EOF";
 insert into ticker ( 
    exchange,
@@ -97,8 +110,55 @@ EOF
 			$tick->{percentChange24hUsd},
 			$tick->{lastUpdated} )
 	    or confess "Error executing $sql\n";
+
+	$symCap->{$tick->{symbol}}++;
     }
-    print '';
+
+    ### Take lastUpdated out of the select part of the query, once you
+    ### are done debugging.
+    my $backGetSql =<< "EOF";
+select 
+    name, 
+    priceUsd, 
+    priceBtc, 
+    percentChange24hUsd,
+    lastUpdated
+from ticker
+where 
+    exchange = ? 
+    and symbol = ? 
+    and lastUpdated = (select max(lastUpdated) from ticker
+where exchange = ? and symbol = ?)
+EOF
+    my $backGetSth = $self->{dbh}->prepare ( $backGetSql );
+
+    # Add some plumbing to sort out the query parameters below.
+    my @names = qw / 
+        name
+        priceUsd 
+        priceBtc 
+        percentChange24hUsd 
+    /;
+
+    my %nm = ();
+    for ( my $i = 0 ; $i <= $#names ; $i++ ) {
+	$nm{$names[$i]} = $i;
+    }
+
+    foreach my $symbol ( keys %{$symCap} ) {
+#	if ( $symCap->{$symbol} == 0 ) {
+	if ( $symCap->{$symbol} == 1 ) {
+	    # We need to back fill a missing entry.
+
+	    $backGetSth->execute ( $exchange, $symbol, $exchange, $symbol );
+	    my $res = $backGetSth->fetchall_arrayref;
+
+	    ### Manufacture a new date/time stamp here to use with the
+	    ### insert from gmtime.
+	    print '';
+	    
+	}
+    }
 }
 
 sub updateEma {
