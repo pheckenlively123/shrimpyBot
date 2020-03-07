@@ -116,7 +116,11 @@ sub getTicker {
     return $rv;
 }
 
-sub getAllPortfolios {
+# GET https://api.shrimpy.io/v1/accounts/<exchangeAccountId>/portfolios
+
+# Only returns the bear and bull portfolios, as identified by the bear
+# and bull suffixes from the config.
+sub getPortfolios {
     my $self = shift;
     my $id = shift;
 
@@ -142,6 +146,13 @@ sub getAllPortfolios {
 	if ( $port->{name} =~ /$self->{conf}->{bullSuffix}$/i ) {
 	    $rv->{bull} = $port;
 	    next;
+	}
+    }
+
+    # Make sure we found both the bear and bull portfolios.
+    foreach my $rc ( qw / bear bull / ) {
+	if ( !defined ( $rv->{$rc} ) ) {
+	    confess "Failed to find portfolio for $rc suffix.\n";
 	}
     }
 

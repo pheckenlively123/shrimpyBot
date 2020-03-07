@@ -60,22 +60,30 @@ foreach my $acc ( @{$accountListRef} ) {
 
     if ( $acc->{isRebalancing} ) {
 	# Skip making changes in strategy, if rebalancing is taking
-	# place.  (Yes...I know this could be stale information by the
-	# time I act on it...)
+	# place.  
 	next;
     }
 
-    my $port = $apiWrap->getAllPortfolios ( $acc->{id} );
+    my $port = $apiWrap->getPortfolios ( $acc->{id} );
 
     if ( defined ( $port->{bear}->{active} )
 	 && $port->{bear}->{active} ) {
 	
 	print "Bear mode currently engaged.\n";
+
+	if ( $mark->aboveThresh ( $exName, $port ) ) {
+	    # Active bull portfolio
+	}
+	
 	
     } elsif ( defined ( $port->{bull}->{active} )
 	      && $port->{bull}->{active} ) {
 
 	print "Bull mode currently engaged.\n";
+
+	if ( $mark->belowThresh ( $exName, $port ) ) {
+	    #activate bear portfolio
+	}
 
     } else {
 	confess "Neither bear nor bull modes appear to be active.\n";

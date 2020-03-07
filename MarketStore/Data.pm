@@ -438,4 +438,57 @@ EOF
     }
 }
 
+# return boolean
+sub aboveThresh {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+
+    my $bullPer = $self->getPortPercent (
+	$port, "bull" );
+
+    
+}
+
+# return boolean
+sub belowThresh {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+
+    my $bullPer = $self->getPortPercent (
+	$exchange, $port, "bull" );
+    
+}
+
+# Use BTC where available, else use USDT.
+sub getPortPercent {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+    my $type = shift;
+
+    my $pr = $port->{$type};
+
+    my $bearCount = 0;
+    my $bullCount = 0;
+
+    my $sql =<< "EOF";
+select 
+    bullStatusUsd,
+    bullStatusBtc    
+from ticker
+where 
+    exchange = ? 
+    and symbol = ? 
+    and lastUpdated = (select max(lastUpdated) from ticker
+where exchange = ? and symbol = ?)
+EOF
+
+    my $sth = $self->{dbh}->prepare ( $sql );
+
+    
+    print '';
+}
+
 1;
