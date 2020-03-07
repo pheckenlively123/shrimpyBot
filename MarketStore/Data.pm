@@ -438,7 +438,10 @@ EOF
     }
 }
 
-# return boolean
+### The three methods below need to be revisited when I have fewer
+### interruptsions....
+
+# return boolean...This triggers going back into bull mode from bear.
 sub aboveThresh {
     my $self = shift;
     my $exchange = shift;
@@ -447,10 +450,14 @@ sub aboveThresh {
     my $bullPer = $self->getPortPercent (
 	$port, "bull" );
 
-    
+    if ( $bullPer > $self->{conf}->{startBull} ) {
+	return 1;
+    } else {
+	return 0;
+    }
 }
 
-# return boolean
+# return boolean...This triggers going into bear mode from bull.
 sub belowThresh {
     my $self = shift;
     my $exchange = shift;
@@ -458,10 +465,16 @@ sub belowThresh {
 
     my $bullPer = $self->getPortPercent (
 	$exchange, $port, "bull" );
-    
+
+    if ( $bullPer < $self->{conf}->{endBull} ) {
+	return 1;
+    } else {
+	return 0;
+    }
 }
 
-# Use BTC where available, else use USDT.
+# Use BTC where available, else use USDT...well...for now just work
+# off BTC only...
 sub getPortPercent {
     my $self = shift;
     my $exchange = shift;
@@ -470,7 +483,7 @@ sub getPortPercent {
 
     my $pr = $port->{$type};
 
-    my $bearCount = 0;
+    my $allCount = 0;
     my $bullCount = 0;
 
     my $sql =<< "EOF";
@@ -487,8 +500,31 @@ EOF
 
     my $sth = $self->{dbh}->prepare ( $sql );
 
-    
-    print '';
+    my $ignore = {};
+    my $typeIgnore = $type . "IgnoreList";
+    foreach my $ig ( @{$self->{conf}->{$typeIgnore}} ) {
+	$ignore->{$ig} = '';
+    }
+
+    foreach my $al ( @{$pr->{strategy}->{allocations}} ) {
+
+	if ( defined ( $ignore->{$al->{currency}} ) ) {
+	    next;
+	}
+	
+	$sth->execute ( $exchange, $al->{currency},
+	    $exchange, $al->{currency} );
+	my $res = $sth->fetchrow_hashref;
+
+	if ( $res->{bullStatusBtc} ) {
+	    $bullCount++;
+	}
+
+	$allCount++;
+    }
+
+    my $rv = ( $bullCount / $allCount ) * 100;
+    return $rv;
 }
 
 1;

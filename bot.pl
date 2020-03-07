@@ -73,6 +73,7 @@ foreach my $acc ( @{$accountListRef} ) {
 
 	if ( $mark->aboveThresh ( $exName, $port ) ) {
 	    # Active bull portfolio
+	    print "We would have activated bull portfolio.\n";
 	}
 	
 	
@@ -83,6 +84,7 @@ foreach my $acc ( @{$accountListRef} ) {
 
 	if ( $mark->belowThresh ( $exName, $port ) ) {
 	    #activate bear portfolio
+	    print "We would have activated bear portfolio.\n";
 	}
 
     } else {
