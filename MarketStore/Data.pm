@@ -114,15 +114,12 @@ EOF
 	$symCap->{$tick->{symbol}}++;
     }
 
-    ### Take lastUpdated out of the select part of the query, once you
-    ### are done debugging.
     my $backGetSql =<< "EOF";
 select 
     name, 
     priceUsd, 
     priceBtc, 
-    percentChange24hUsd,
-    lastUpdated
+    percentChange24hUsd
 from ticker
 where 
     exchange = ? 
@@ -145,18 +142,36 @@ EOF
 	$nm{$names[$i]} = $i;
     }
 
+    # Where we are missing entries, back fill with the last value we
+    # received.
     foreach my $symbol ( keys %{$symCap} ) {
-#	if ( $symCap->{$symbol} == 0 ) {
-	if ( $symCap->{$symbol} == 1 ) {
+
+	if ( $symCap->{$symbol} == 0 ) {
+
 	    # We need to back fill a missing entry.
 
 	    $backGetSth->execute ( $exchange, $symbol, $exchange, $symbol );
 	    my $res = $backGetSth->fetchall_arrayref;
 
-	    ### Manufacture a new date/time stamp here to use with the
-	    ### insert from gmtime.
-	    print '';
+	    # Manufacture a new date/time stamp here to use with the
+	    # insert from gmtime.
+	    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+		gmtime ( time () );
+
+	    $year += 1900;
+	    $mon++;
+
+	    my $synthDate = sprintf '%04d-%02d-%02dT%02d:%02d:%02d.000Z',
+	    $year, $mon, $mday, $hour, $min, $sec;
 	    
+	    $sth->execute ( $exchange,
+			    $res->[0]->[$nm{name}],
+			    $symbol,
+			    $res->[0]->[$nm{priceUsd}],
+			    $res->[0]->[$nm{priceBtc}],
+			    $res->[0]->[$nm{percentChange24hUsd}],
+			    $synthDate )
+		or confess "Error executing $sql\n";
 	}
     }
 }
@@ -228,7 +243,7 @@ EOF
     my $sthUpdateEma = $self->{dbh}->prepare ( $updateEmaSql );
     
     $sthName->execute ( $exchange );
-    foreach my $res ( $sthName->fetchrow_hashref ) {
+    while ( my $res = $sthName->fetchrow_hashref ) {
 
 	$sthPrices->execute ( $exchange, $res->{name} );
 
@@ -410,7 +425,7 @@ EOF
     my $sthDel = $self->{dbh}->prepare ( $sqlDel );
     
     $sthName->execute ( $exchange );
-    foreach my $hr ( $sthName->fetchrow_hashref ) {
+    while ( my $hr = $sthName->fetchrow_hashref ) {
 	
 	$sthAllName->execute ( $exchange, $hr->{name} );
 	my $alr = $sthAllName->fetchall_arrayref;
