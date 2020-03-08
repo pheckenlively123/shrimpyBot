@@ -41,6 +41,7 @@ sub loadDDL {
 
     my $sql =<< "EOF";
 create table if not exists ticker (
+   key INTEGER PRIMARY KEY AUTOINCREMENT,
    exchange text not null,
    name text not null,
    symbol text not null,
@@ -67,6 +68,79 @@ EOF
     # warm up delay.  Still mulling this one through...
 
     # See how performance goes on the queries, before we add indexes.
+}
+
+sub dumpDatabase {
+    my $self = shift;
+
+    if ( !defined ( $self->{conf}->{dumpFile} ) ) {
+	return;
+    }
+
+    my $sql =<< "EOF";
+select 
+    key,
+    exchange,
+    name,
+    symbol,
+    priceUsd,
+    priceBtc,
+    percentChange24hUsd,
+    lastUpdated,
+    shortEmaUsd,
+    longEmaUsd,
+    shortEmaBtc,
+    longEmaBtc,
+    bullStatusUsd,
+    bullStatusBtc
+from ticker
+order by 
+    exchange,
+    symbol,
+    lastUpdated
+EOF
+	
+    open ( my $WT, '>', $self->{conf}->{dumpFile} )
+	or confess 
+	"Failed to open " . $self->{conf}->{dumpFile} . " for write: $!\n";
+
+    print {$WT} "key,exchange,name,symbol,priceUsd,priceBtc,percentChange24hUsd,lastUpdated,shortEmaUsd,longEmaUsd,shortEmaBtc,longEmaBtc,bullStatusUsd,bullStatusBtc\n";
+    
+    my $sth = $self->{dbh}->prepare ( $sql );
+    $sth->execute ();
+    while ( my $res = $sth->fetchrow_arrayref ) {
+	my $outLine = "";
+	foreach my $col ( @{$res} ) {
+	    if ( defined ( $col ) ) {
+		$outLine .= $col . ",";
+	    } else {
+		$outLine .= 'UNDEF' . ",";
+	    }
+	}
+	$outLine =~ s/,$//;
+
+	print {$WT} "$outLine\n";
+    }
+
+    close ( $WT )
+	or confess 
+	"Error closing " . $self->{conf}->{dumpFile} . " from write: $!\n";
+}
+
+sub openDump {
+    my $self = shift;
+
+    if ( !defined ( $self->{conf}->{dumpFile} ) ) {
+	return;
+    }
+    
+    my $cmd = sprintf "soffice %s", $self->{conf}->{dumpFile};
+
+    # This leaves the soffice process in the forground intentionally...
+    my $try = system ( $cmd );
+    if ( $try != 0 ) {
+	confess "Error running \"$cmd\": $!\n";
+    }
 }
 
 sub loadTicker {
@@ -166,13 +240,14 @@ sub updateEma {
     my $exchange = shift;
 
     my $sqlName =<< "EOF";
-select distinct name from ticker where exchange = ?
+select distinct symbol from ticker where exchange = ?
 EOF
 
     my $sthName = $self->{dbh}->prepare ( $sqlName );
 
     my $sqlPrices =<< "EOF";
 select 
+    key,
     priceUsd, 
     priceBtc, 
     lastUpdated,
@@ -185,29 +260,9 @@ select
 from 
     ticker 
 where 
-    exchange = ? and name = ?
+    exchange = ? and symbol = ?
 order by lastUpdated
 EOF
-
-    # Define a helper hash to help make things more readable below.
-    my %nm = ();
-    my @fieldList = qw /
-	priceUsd  
-	priceBtc  
-	lastUpdated 
-	shortEmaUsd 
-	longEmaUsd 
-	shortEmaBtc 
-	longEmaBtc
-        bullStatusUsd
-        bullStatusBtc
-	/;
-    
-    my $fnum = 0;
-    foreach my $field ( @fieldList ) {
-	$nm{$field} = $fnum;
-	$fnum++;
-    }
     
     my $sthPrices = $self->{dbh}->prepare ( $sqlPrices );
 
@@ -220,25 +275,30 @@ update ticker set
     bullStatusUsd = ?,
     bullStatusBtc = ?
 where
-    exchange = ? 
-    and name = ?
-    and lastUpdated = ?
+    key = ?
 EOF
 
     my $sthUpdateEma = $self->{dbh}->prepare ( $updateEmaSql );
     
     $sthName->execute ( $exchange );
-    foreach my $res ( $sthName->fetchrow_hashref ) {
+    while ( my $rName = $sthName->fetchrow_hashref ) {
 
-	$sthPrices->execute ( $exchange, $res->{name} );
+	if ( $self->{conf}->{debugMode} ) {
+	    printf "Working on symbol: %s\n", $rName->{symbol};
+	}
+
+	$sthPrices->execute ( $exchange, $rName->{symbol} );
 
 	# Later on, we are going to delete rows to get back to the
 	# maxHistory configuration parameter, so the entire result set
 	# should always be relatively modest in size.
-	my $prListRef = $sthPrices->fetchall_arrayref;
+	my @ut = ();
+	while ( my $rr = $sthPrices->fetchrow_hashref () ) {
+	    push ( @ut, $rr );
+	}
 
 	# Using the for loop to get easy access to the previous EMA.
-	for ( my $i = 0 ; $i <= $#{$prListRef} ; $i++ ) {
+	for ( my $i = 0 ; $i <= $#ut ; $i++ ) {
 
 	    my $sw = 2 / ( $self->{conf}->{shortEma} + 1 );
 	    my $lw = 2 / ( $self->{conf}->{longEma} + 1 );
@@ -252,46 +312,46 @@ EOF
 		# is passed, we should have converged to the actual
 		# EMAs.
 		
-		if ( !defined ( $prListRef->[$i]->[$nm{shortEmaUsd}] ) ) {
-		    $prListRef->[$i]->[$nm{shortEmaUsd}] = 
-			$prListRef->[$i]->[$nm{priceUsd}];
+		if ( !defined ( $ut[$i]->{shortEmaUsd} ) ) {
+		    $ut[$i]->{shortEmaUsd} = 
+			$ut[$i]->{priceUsd};
 		    $updateFlagZero = 1;
 		}
 
-		if ( !defined ( $prListRef->[$i]->[$nm{longEmaUsd}] ) ) {
-		    $prListRef->[$i]->[$nm{longEmaUsd}] = 
-			$prListRef->[$i]->[$nm{priceUsd}];
+		if ( !defined ( $ut[$i]->{longEmaUsd} ) ) {
+		    $ut[$i]->{longEmaUsd} = 
+			$ut[$i]->{priceUsd};
 		    $updateFlagZero = 1;
 		}
 
-		if ( !defined ( $prListRef->[$i]->[$nm{shortEmaBtc}] ) ) {
-		    $prListRef->[$i]->[$nm{shortEmaBtc}] = 
-			$prListRef->[$i]->[$nm{priceBtc}];
+		if ( !defined ( $ut[$i]->{shortEmaBtc} ) ) {
+		    $ut[$i]->{shortEmaBtc} = 
+			$ut[$i]->{priceBtc};
 		    $updateFlagZero = 1;		    
 		}
 		
-		if ( !defined ( $prListRef->[$i]->[$nm{longEmaBtc}] ) ) {
-		    $prListRef->[$i]->[$nm{longEmaBtc}] = 
-			$prListRef->[$i]->[$nm{priceBtc}];
+		if ( !defined ( $ut[$i]->{longEmaBtc} ) ) {
+		    $ut[$i]->{longEmaBtc} = 
+			$ut[$i]->{priceBtc};
 		    $updateFlagZero = 1;
 		}
 
-		if ( !defined ( $prListRef->[$i]->[$nm{bullStatusUsd}] ) ) {
-		    if ( $prListRef->[$i]->[$nm{shortEmaUsd}] 
-			 > $prListRef->[$i]->[$nm{longEmaUsd}] ) {
-			$prListRef->[$i]->[$nm{bullStatusUsd}] = 1;
+		if ( !defined ( $ut[$i]->{bullStatusUsd} ) ) {
+		    if ( $ut[$i]->{shortEmaUsd} 
+			 > $ut[$i]->{longEmaUsd} ) {
+			$ut[$i]->{bullStatusUsd} = 1;
 		    } else {
-			$prListRef->[$i]->[$nm{bullStatusUsd}] = 0;
+			$ut[$i]->{bullStatusUsd} = 0;
 		    }
 		    $updateFlagZero = 1;
 		}
 
-		if ( !defined ( $prListRef->[$i]->[$nm{bullStatusBtc}] ) ) {
-		    if ( $prListRef->[$i]->[$nm{shortEmaBtc}]
-			 > $prListRef->[$i]->[$nm{longEmaBtc}] ) {
-			$prListRef->[$i]->[$nm{bullStatusBtc}] = 1;
+		if ( !defined ( $ut[$i]->{bullStatusBtc} ) ) {
+		    if ( $ut[$i]->{shortEmaBtc}
+			 > $ut[$i]->{longEmaBtc} ) {
+			$ut[$i]->{bullStatusBtc} = 1;
 		    } else {
-			$prListRef->[$i]->[$nm{bullStatusBtc}] = 0;
+			$ut[$i]->{bullStatusBtc} = 0;
 		    }
 		    $updateFlagZero = 1;
 		}
@@ -300,15 +360,13 @@ EOF
 		# there are changes.
 		if ( $updateFlagZero ) { 
 		    $sthUpdateEma->execute (
-			$prListRef->[$i]->[$nm{shortEmaUsd}],
-			$prListRef->[$i]->[$nm{longEmaUsd}],
-			$prListRef->[$i]->[$nm{shortEmaBtc}],
-			$prListRef->[$i]->[$nm{longEmaBtc}],
-			$prListRef->[$i]->[$nm{bullStatusUsd}],
-			$prListRef->[$i]->[$nm{bullStatusBtc}],
-			$exchange,
-			$res->{name},
-			$prListRef->[$i]->[$nm{lastUpdated}] );
+			$ut[$i]->{shortEmaUsd},
+			$ut[$i]->{longEmaUsd},
+			$ut[$i]->{shortEmaBtc},
+			$ut[$i]->{longEmaBtc},
+			$ut[$i]->{bullStatusUsd},
+			$ut[$i]->{bullStatusBtc},
+			$ut[$i]->{key} );
 		    
 		}
 
@@ -319,50 +377,50 @@ EOF
 	    # Only perform the update, if there is something new.
 	    my $updateFlag = 0;
 	    
-	    if ( !defined ( $prListRef->[$i]->[$nm{shortEmaUsd}] ) ) {
-		$prListRef->[$i]->[$nm{shortEmaUsd}] = 
-		    ( $prListRef->[$i]->[$nm{priceUsd}] * $sw )
-		    + ( $prListRef->[$i-1]->[$nm{shortEmaUsd}] * ( $sw - 1 ) );
+	    if ( !defined ( $ut[$i]->{shortEmaUsd} ) ) {
+		$ut[$i]->{shortEmaUsd} = 
+		    ( $ut[$i]->{priceUsd} * $sw )
+		    + ( $ut[$i-1]->{shortEmaUsd} * ( $sw - 1 ) );
 		$updateFlag = 1;
 	    }
 	    
-	    if ( !defined ( $prListRef->[$i]->[$nm{longEmaUsd}] ) ) {
-		$prListRef->[$i]->[$nm{longEmaUsd}] =
-		    ( $prListRef->[$i]->[$nm{priceUsd}] * $lw )
-		    + ( $prListRef->[$i-1]->[$nm{longEmaUsd}] * ( $lw - 1 ) );
+	    if ( !defined ( $ut[$i]->{longEmaUsd} ) ) {
+		$ut[$i]->{longEmaUsd} =
+		    ( $ut[$i]->{priceUsd} * $lw )
+		    + ( $ut[$i-1]->{longEmaUsd} * ( $lw - 1 ) );
 		$updateFlag = 1;
 	    }
 	    
-	    if ( !defined ( $prListRef->[$i]->[$nm{shortEmaBtc}] ) ) {
-		$prListRef->[$i]->[$nm{shortEmaBtc}] = 
-		    ( $prListRef->[$i]->[$nm{priceBtc}] * $sw )
-		    + ( $prListRef->[$i-1]->[$nm{shortEmaBtc}] * ( $sw - 1 ) );
+	    if ( !defined ( $ut[$i]->{shortEmaBtc} ) ) {
+		$ut[$i]->{shortEmaBtc} = 
+		    ( $ut[$i]->{priceBtc} * $sw )
+		    + ( $ut[$i-1]->{shortEmaBtc} * ( $sw - 1 ) );
 		$updateFlag = 1;
 	    }
 	    
-	    if ( !defined ( $prListRef->[$i]->[$nm{longEmaBtc}] ) ) {
-		$prListRef->[$i]->[$nm{longEmaBtc}] = 
-		    ( $prListRef->[$i]->[$nm{priceBtc}] * $lw )
-		    + ( $prListRef->[$i-1]->[$nm{longEmaBtc}] * ( $lw - 1 ) );
+	    if ( !defined ( $ut[$i]->{longEmaBtc} ) ) {
+		$ut[$i]->{longEmaBtc} = 
+		    ( $ut[$i]->{priceBtc} * $lw )
+		    + ( $ut[$i-1]->{longEmaBtc} * ( $lw - 1 ) );
 		$updateFlag = 1;
 	    }
 
-	    if ( !defined ( $prListRef->[$i]->[$nm{bullStatusUsd}] ) ) {
-		if ( $prListRef->[$i]->[$nm{shortEmaUsd}] 
-		     > $prListRef->[$i]->[$nm{longEmaUsd}] ) {
-		    $prListRef->[$i]->[$nm{bullStatusUsd}] = 1;
+	    if ( !defined ( $ut[$i]->{bullStatusUsd} ) ) {
+		if ( $ut[$i]->{shortEmaUsd} 
+		     > $ut[$i]->{longEmaUsd} ) {
+		    $ut[$i]->{bullStatusUsd} = 1;
 		} else {
-		    $prListRef->[$i]->[$nm{bullStatusUsd}] = 0;
+		    $ut[$i]->{bullStatusUsd} = 0;
 		}
 		$updateFlag = 1;
 	    }
 	    
-	    if ( !defined ( $prListRef->[$i]->[$nm{bullStatusBtc}] ) ) {
-		if ( $prListRef->[$i]->[$nm{shortEmaBtc}]
-		     > $prListRef->[$i]->[$nm{longEmaBtc}] ) {
-		    $prListRef->[$i]->[$nm{bullStatusBtc}] = 1;
+	    if ( !defined ( $ut[$i]->{bullStatusBtc} ) ) {
+		if ( $ut[$i]->{shortEmaBtc}
+		     > $ut[$i]->{longEmaBtc} ) {
+		    $ut[$i]->{bullStatusBtc} = 1;
 		} else {
-		    $prListRef->[$i]->[$nm{bullStatusBtc}] = 0;
+		    $ut[$i]->{bullStatusBtc} = 0;
 		}
 		$updateFlag = 1;
 	    }	    
@@ -371,15 +429,13 @@ EOF
 	    # there are updates.
 	    if ( $updateFlag ) {
 		$sthUpdateEma->execute (
-		    $prListRef->[$i]->[$nm{shortEmaUsd}],
-		    $prListRef->[$i]->[$nm{longEmaUsd}],
-		    $prListRef->[$i]->[$nm{shortEmaBtc}],
-		    $prListRef->[$i]->[$nm{longEmaBtc}],
-		    $prListRef->[$i]->[$nm{bullStatusUsd}],
-		    $prListRef->[$i]->[$nm{bullStatusBtc}],
-		    $exchange,
-		    $res->{name},
-		    $prListRef->[$i]->[$nm{lastUpdated}] );
+		    $ut[$i]->{shortEmaUsd},
+		    $ut[$i]->{longEmaUsd},
+		    $ut[$i]->{shortEmaBtc},
+		    $ut[$i]->{longEmaBtc},
+		    $ut[$i]->{bullStatusUsd},
+		    $ut[$i]->{bullStatusBtc},
+		    $ut[$i]->{key} );
 	    }
 	}
     }

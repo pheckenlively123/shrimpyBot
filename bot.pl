@@ -29,7 +29,12 @@ bot.pl -c CONF [-h]
 
 EOF
     
-getopt('c:h', $opts);
+getopt('hc:', $opts);
+
+if ( defined ( $opts->{h} ) ) {
+    print $usage;
+    exit ( 0 );
+}
 
 foreach my $op ( qw / c / ) {
     if ( !defined ( $opts->{c} ) ) {
@@ -80,9 +85,11 @@ foreach my $acc ( @{$accountListRef} ) {
     } else {
 	confess "Neither bear nor bull modes appear to be active.\n";
     }
-	
-    print '';
-    
 }
 
-print '';
+# These next two return without doing anything, as long as the
+# <dumpFile> node is commented out in the config.
+$mark->dumpDatabase ();
+#$mark->openDump ();
+
+exit ( 0 );
