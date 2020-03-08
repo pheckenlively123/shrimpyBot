@@ -56,7 +56,10 @@ foreach my $acc ( @{$accountListRef} ) {
     $mark->updateEma ( $exName );
     $mark->trimHistory ( $exName );
 
-    ### ToDo: Add warm up delay support.
+    # We don't have enough data for meaningful trading decisions yet.
+    if ( $mark->inWarmUpDelay ( $exName ) ) {
+	next;
+    }
 
     if ( $acc->{isRebalancing} ) {
 	# Skip making changes in strategy, if rebalancing is taking
@@ -73,7 +76,9 @@ foreach my $acc ( @{$accountListRef} ) {
 
 	if ( $mark->aboveThresh ( $exName, $port ) ) {
 	    # Active bull portfolio
-	    print "We would have activated bull portfolio.\n";
+	    print "Activating bull portfolio.\n";
+	} else {
+	    print "Stay in in bear mode.\n";
 	}
 	
 	
@@ -84,7 +89,9 @@ foreach my $acc ( @{$accountListRef} ) {
 
 	if ( $mark->belowThresh ( $exName, $port ) ) {
 	    #activate bear portfolio
-	    print "We would have activated bear portfolio.\n";
+	    print "Activating bear portfolio.\n";
+	} else {
+	    print "Stay in bull mode.\n";
 	}
 
     } else {

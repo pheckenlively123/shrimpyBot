@@ -438,6 +438,34 @@ EOF
     }
 }
 
+# Dirt simple warm up for now.  If the number of rows for the BTC
+# ticker for the specified exchange is greater than the warm up, we
+# are out of warm up.  Remove the database file, whenever you want to
+# do a warm up period.
+sub inWarmUpDelay {
+    my $self = shift;
+    my $exchange = shift;
+
+    my $sql =<< "EOF";
+select count(lastUpdated)
+from ticker
+where exchange = ? and symbol = 'BTC'
+EOF
+
+    my $sth = $self->{dbh}->prepare ( $sql );
+    $sth->execute ( $exchange );
+    my $res = $sth->fetchall_arrayref ();
+    my $count = $res->[0]->[0];
+
+    if ( $count >= $self->{conf}->{warmUpDelay} ) {
+	printf "Hit warm up: %d\n", $count;
+	return 0;
+    } else {
+	printf "Still warming: %d\n", $count;
+	return 1;
+    }
+}
+    
 ### The three methods below need to be revisited when I have fewer
 ### interruptsions....
 
@@ -450,7 +478,9 @@ sub aboveThresh {
     my $bullPer = $self->getPortPercent (
 	$port, "bull" );
 
-    if ( $bullPer > $self->{conf}->{startBull} ) {
+    printf "Bull percent: %02.2f%%\n", $bullPer;
+    
+    if ( $bullPer >= $self->{conf}->{startBull} ) {
 	return 1;
     } else {
 	return 0;
@@ -466,7 +496,9 @@ sub belowThresh {
     my $bullPer = $self->getPortPercent (
 	$exchange, $port, "bull" );
 
-    if ( $bullPer < $self->{conf}->{endBull} ) {
+    printf "Bull percent: %02.2f%%\n", $bullPer;
+
+    if ( $bullPer <= $self->{conf}->{endBull} ) {
 	return 1;
     } else {
 	return 0;
