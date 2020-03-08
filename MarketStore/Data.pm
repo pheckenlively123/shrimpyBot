@@ -188,15 +188,12 @@ EOF
 	$symCap->{$tick->{symbol}}++;
     }
 
-    ### Take lastUpdated out of the select part of the query, once you
-    ### are done debugging.
     my $backGetSql =<< "EOF";
 select 
     name, 
     priceUsd, 
     priceBtc, 
-    percentChange24hUsd,
-    lastUpdated
+    percentChange24hUsd
 from ticker
 where 
     exchange = ? 
@@ -219,18 +216,36 @@ EOF
 	$nm{$names[$i]} = $i;
     }
 
+    # Where we are missing entries, back fill with the last value we
+    # received.
     foreach my $symbol ( keys %{$symCap} ) {
-#	if ( $symCap->{$symbol} == 0 ) {
-	if ( $symCap->{$symbol} == 1 ) {
+
+	if ( $symCap->{$symbol} == 0 ) {
+
 	    # We need to back fill a missing entry.
 
 	    $backGetSth->execute ( $exchange, $symbol, $exchange, $symbol );
 	    my $res = $backGetSth->fetchall_arrayref;
 
-	    ### Manufacture a new date/time stamp here to use with the
-	    ### insert from gmtime.
-	    print '';
+	    # Manufacture a new date/time stamp here to use with the
+	    # insert from gmtime.
+	    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+		gmtime ( time () );
+
+	    $year += 1900;
+	    $mon++;
+
+	    my $synthDate = sprintf '%04d-%02d-%02dT%02d:%02d:%02d.000Z',
+	    $year, $mon, $mday, $hour, $min, $sec;
 	    
+	    $sth->execute ( $exchange,
+			    $res->[0]->[$nm{name}],
+			    $symbol,
+			    $res->[0]->[$nm{priceUsd}],
+			    $res->[0]->[$nm{priceBtc}],
+			    $res->[0]->[$nm{percentChange24hUsd}],
+			    $synthDate )
+		or confess "Error executing $sql\n";
 	}
     }
 }
@@ -466,7 +481,7 @@ EOF
     my $sthDel = $self->{dbh}->prepare ( $sqlDel );
     
     $sthName->execute ( $exchange );
-    foreach my $hr ( $sthName->fetchrow_hashref ) {
+    while ( my $hr = $sthName->fetchrow_hashref ) {
 	
 	$sthAllName->execute ( $exchange, $hr->{name} );
 	my $alr = $sthAllName->fetchall_arrayref;
@@ -477,6 +492,127 @@ EOF
 	    $sthDel->execute ( $exchange, $hr->{name}, $row->[0] );
 	}
     }
+}
+
+# Dirt simple warm up for now.  If the number of rows for the BTC
+# ticker for the specified exchange is greater than the warm up, we
+# are out of warm up.  Remove the database file, whenever you want to
+# do a warm up period.
+sub inWarmUpDelay {
+    my $self = shift;
+    my $exchange = shift;
+
+    my $sql =<< "EOF";
+select count(lastUpdated)
+from ticker
+where exchange = ? and symbol = 'BTC'
+EOF
+
+    my $sth = $self->{dbh}->prepare ( $sql );
+    $sth->execute ( $exchange );
+    my $res = $sth->fetchall_arrayref ();
+    my $count = $res->[0]->[0];
+
+    if ( $count >= $self->{conf}->{warmUpDelay} ) {
+	printf "Hit warm up: %d\n", $count;
+	return 0;
+    } else {
+	printf "Still warming: %d\n", $count;
+	return 1;
+    }
+}
+    
+### The three methods below need to be revisited when I have fewer
+### interruptsions....
+
+# return boolean...This triggers going back into bull mode from bear.
+sub aboveThresh {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+
+    my $bullPer = $self->getPortPercent (
+	$port, "bull" );
+
+    printf "Bull percent: %02.2f%%\n", $bullPer;
+    
+    if ( $bullPer >= $self->{conf}->{startBull} ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+# return boolean...This triggers going into bear mode from bull.
+sub belowThresh {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+
+    my $bullPer = $self->getPortPercent (
+	$exchange, $port, "bull" );
+
+    printf "Bull percent: %02.2f%%\n", $bullPer;
+
+    if ( $bullPer <= $self->{conf}->{endBull} ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+# Use BTC where available, else use USDT...well...for now just work
+# off BTC only...
+sub getPortPercent {
+    my $self = shift;
+    my $exchange = shift;
+    my $port = shift;
+    my $type = shift;
+
+    my $pr = $port->{$type};
+
+    my $allCount = 0;
+    my $bullCount = 0;
+
+    my $sql =<< "EOF";
+select 
+    bullStatusUsd,
+    bullStatusBtc    
+from ticker
+where 
+    exchange = ? 
+    and symbol = ? 
+    and lastUpdated = (select max(lastUpdated) from ticker
+where exchange = ? and symbol = ?)
+EOF
+
+    my $sth = $self->{dbh}->prepare ( $sql );
+
+    my $ignore = {};
+    my $typeIgnore = $type . "IgnoreList";
+    foreach my $ig ( @{$self->{conf}->{$typeIgnore}} ) {
+	$ignore->{$ig} = '';
+    }
+
+    foreach my $al ( @{$pr->{strategy}->{allocations}} ) {
+
+	if ( defined ( $ignore->{$al->{currency}} ) ) {
+	    next;
+	}
+	
+	$sth->execute ( $exchange, $al->{currency},
+	    $exchange, $al->{currency} );
+	my $res = $sth->fetchrow_hashref;
+
+	if ( $res->{bullStatusBtc} ) {
+	    $bullCount++;
+	}
+
+	$allCount++;
+    }
+
+    my $rv = ( $bullCount / $allCount ) * 100;
+    return $rv;
 }
 
 1;

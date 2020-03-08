@@ -61,26 +61,43 @@ foreach my $acc ( @{$accountListRef} ) {
     $mark->updateEma ( $exName );
     $mark->trimHistory ( $exName );
 
-    ### ToDo: Add warm up delay support.
-
-    if ( $acc->{isRebalancing} ) {
-	# Skip making changes in strategy, if rebalancing is taking
-	# place.  (Yes...I know this could be stale information by the
-	# time I act on it...)
+    # We don't have enough data for meaningful trading decisions yet.
+    if ( $mark->inWarmUpDelay ( $exName ) ) {
 	next;
     }
 
-    my $port = $apiWrap->getAllPortfolios ( $acc->{id} );
+    if ( $acc->{isRebalancing} ) {
+	# Skip making changes in strategy, if rebalancing is taking
+	# place.  
+	next;
+    }
+
+    my $port = $apiWrap->getPortfolios ( $acc->{id} );
 
     if ( defined ( $port->{bear}->{active} )
 	 && $port->{bear}->{active} ) {
 	
 	print "Bear mode currently engaged.\n";
+
+	if ( $mark->aboveThresh ( $exName, $port ) ) {
+	    # Active bull portfolio
+	    print "Activating bull portfolio.\n";
+	} else {
+	    print "Stay in in bear mode.\n";
+	}
+	
 	
     } elsif ( defined ( $port->{bull}->{active} )
 	      && $port->{bull}->{active} ) {
 
 	print "Bull mode currently engaged.\n";
+
+	if ( $mark->belowThresh ( $exName, $port ) ) {
+	    #activate bear portfolio
+	    print "Activating bear portfolio.\n";
+	} else {
+	    print "Stay in bull mode.\n";
+	}
 
     } else {
 	confess "Neither bear nor bull modes appear to be active.\n";
