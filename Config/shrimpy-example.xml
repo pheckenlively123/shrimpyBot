@@ -1,46 +1,67 @@
 <config>
-  <!-- API base URL -->
-  <apiBaseUrl>https://api.shrimpy.io</apiBaseUrl>
-  <!-- API base path -->
-  <apiBasePath>/v1</apiBasePath>
-  <!-- This is the number of micro seconds to wait before each REST
-       call.  This prevents us from calling the API too fast. -->
-  <restApiDelay>100000</restApiDelay>
-  <!-- Your API key goes in the field below. -->
-  <apiKey>YourApiKeyGoesHere</apiKey>
-  <!-- Your API secret goes in the field below. -->
-  <apiSecret>YourApiSecretGoesHere</apiSecret>
-  <!-- If the bear profile reaches this threshold, switch to
-       bear. This will likely mean that all of the crypto markets are
-       in free fall. -->
-  <startBull>30</startBull>
-  <!-- If the bear profile reaches this threshold, switch back to bull. -->
-  <endBull>5</endBull>
-  <!-- Suffix of the portfolio to use when we go into bear mode. -->
-  <bearSuffix>BEAR</bearSuffix>
-  <!-- Suffix of the portfolio to use when we go into bull mode. -->
-  <bullSuffix>HYBRID</bullSuffix>
-  <!-- Comma delimited list of symbols to ignore in the bear analysis. -->
-  <bearIgnoreList>BTC</bearIgnoreList>
+  <base>
+    <!-- API base URL -->
+    <apiBaseUrl>https://api.shrimpy.io</apiBaseUrl>
+    <!-- API base path -->
+    <apiBasePath>/v1</apiBasePath>
+    <!-- This is the number of micro seconds to wait before each REST
+         call.  This prevents us from calling the API too fast. -->
+    <restApiDelay>100000</restApiDelay>
+    <!-- Your API key goes in the field below. -->
+    <apiKey>YourApiKeyGoesHere</apiKey>
+    <!-- Your API secret goes in the field below. -->
+    <apiSecret>YourApiSecretGoesHere</apiSecret>
+  </base>
+  <switch>
+    <!-- If the bear profile reaches this threshold, switch to
+         bear. This will likely mean that all of the crypto markets
+         are in free fall. -->
+    <!-- This part of the config is no longer useful.  Shrimpy updated
+         their features, and this idea was OBE (Overcome By
+         Events). -->
+    <startBull>30</startBull>
+    <!-- If the bear profile reaches this threshold, switch back to bull. -->
+    <endBull>5</endBull>
+    <!-- Suffix of the portfolio to use when we go into bear mode. -->
+    <bearSuffix>BEAR</bearSuffix>
+    <!-- Suffix of the portfolio to use when we go into bull mode. -->
+    <bullSuffix>HYBRID</bullSuffix>
+    <!-- Comma delimited list of symbols to ignore in the bear analysis. -->
+    <bearIgnoreList>BTC</bearIgnoreList>
     <!-- Comma delimited list of symbols to ignore in the bull analysis. -->
-  <bullIgnoreList>USDT</bullIgnoreList>
-  <!-- Location of the SQLite data file. -->
-  <dbFile>/home/pheckenl/Projects/shrimpyBot/MarketStore/markets.db</dbFile>
-  <!-- Dump file location, for debugging the database. -->
-  <dumpFile>/home/pheckenl/Projects/shrimpyBot/MarketStore/markets.csv</dumpFile>
-  <!-- Short term EMA for Bull/Bear analysis. -->
-  <shortEma>12</shortEma>
-  <!-- Long term EMA for Bull/Bear analysis. -->
-  <longEma>26</longEma>
-  <!-- How many rows of history to keep for each coin for each exchange. -->
-  <maxHistory>1000</maxHistory>
-  <!-- Put the frequency with which this gets run by cron below.  This
-       is used for warmup detection. -->
-  <!-- <cronInterval>10</cronInterval> -->
-  <!-- Warm up delay.  If warm up is needed, wait this many
-       executions, before making trading decisions. -->
-  <!-- <warmUpDelay>100</warmUpDelay> -->
-  <warmUpDelay>10</warmUpDelay>
-  <!-- Turn on extra debugging output. -->
-  <debugMode>1</debugMode>
+    <bullIgnoreList>USDT</bullIgnoreList>
+    <!-- Location of the SQLite data file. -->
+    <dbFile>YourDatabaseFileGoesHere</dbFile>
+    <!-- Dump file location, for debugging the database. -->
+    <dumpFile>YourDumpFileGoesHere</dumpFile>
+    <!-- Short term EMA for Bull/Bear analysis. -->
+    <shortEma>12</shortEma>
+    <!-- Long term EMA for Bull/Bear analysis. -->
+    <longEma>26</longEma>
+    <!-- How many rows of history to keep for each coin for each exchange. -->
+    <maxHistory>1000</maxHistory>
+    <!-- Put the frequency with which this gets run by cron below.
+         This is used for warmup detection. -->
+    <!-- <cronInterval>10</cronInterval> -->
+    <!-- Warm up delay.  If warm up is needed, wait this many
+         executions, before making trading decisions. -->
+    <!-- <warmUpDelay>100</warmUpDelay> -->
+    <warmUpDelay>10</warmUpDelay>
+    <!-- Turn on extra debugging output. -->
+    <debugMode>1</debugMode>
+  </switch>
+  <watch>
+    <!-- Comma delimited list of portfolios to watch. -->
+    <portfolios>binance-bull-auto,binance-bear-auto</portfolios>
+    <!-- Max percent before notifing. -->
+    <maxdiff>1</maxdiff>
+    <!-- Time to wait in minutes before sending another notice. -->
+    <cooldown>60</cooldown>
+    <!-- Email address to send the notification. -->
+    <email>YourEmailGoesHere</email>
+  </watch>
+  <logging>
+    <logDir>YourLogDirGoesHere</logDir>
+    <logPrefix>watchLog</logPrefix>
+  </logging>
 </config>

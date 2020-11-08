@@ -38,7 +38,7 @@ if ( defined ( $opts->{h} ) ) {
 
 foreach my $op ( qw / c / ) {
     if ( !defined ( $opts->{c} ) ) {
-	warn "Missing required option: -c\n";
+	warn "Missing required option: -$op\n";
 	die $usage;
     }
 }
@@ -46,6 +46,8 @@ foreach my $op ( qw / c / ) {
 ### Subroutine Section ###
 
 ### Main Section ###
+
+confess "Update this code base to account for the changes in the config wrapper, before you use this.\n";
 
 $confParse = Config::ShrimpConfig->new ( $opts->{c} );
 $conf = $confParse->getConfig ();
