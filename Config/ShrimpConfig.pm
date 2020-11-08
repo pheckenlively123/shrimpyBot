@@ -50,19 +50,20 @@ sub _getXPathText {
     return $foundNode->textContent;
 }
 
-sub getConfig {
+sub _getConfSection {
     my $self = shift;
+    my $section = shift;
 
     my $rv = {};
 
-    my @nodeList = $self->{dom}->findnodes ( '/config' );
+    my $xpath = '/config/' . $section;
+    my @nodeList = $self->{dom}->findnodes ( $xpath );
 
     if ( $#nodeList != 0 ) {
-	confess "Found unexpected number of nodes for: /config\n";
+	confess "Found unexpected number of nodes for: $xpath\n";
     }
 
-    my $confNode = $nodeList[0];
-    my @kids = $confNode->childNodes ();
+    my @kids = $nodeList[0]->childNodes ();
 
     foreach my $kid ( @kids ) {
 
@@ -73,14 +74,27 @@ sub getConfig {
 	my $kidName = $kid->nodeName;
 	my $kidValue = $kid->textContent;
 
+	if ( ( $section eq 'watch' ) && ( $kidName eq 'portfolios' ) ) {
+	    my @portList = split ( /,/, $kidValue );
+	    $kidValue = \@portList;
+	}
+
 	$rv->{$kidName} = $kidValue;
     }
 
-    for my $sp ( qw / bearIgnoreList bullIgnoreList / ) {
-	my @ignoreList = split ( /,/, $rv->{$sp} );
-	$rv->{$sp} = \@ignoreList;
-    }
+    return $rv;
+}
+    
 
+sub getConfig {
+    my $self = shift;
+
+    my $rv = {};
+    
+    foreach my $section ( qw / base switch watch logging / ) {
+	$rv->{$section} = $self->_getConfSection ( $section );
+    }
+    
     return $rv;
 }
 

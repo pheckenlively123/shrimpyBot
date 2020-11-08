@@ -46,10 +46,10 @@ sub _standardGet {
     my $uriPath = shift;
     
     # Sleep at the top of every REST call, so we don't forget to do it.
-    usleep ( $self->{conf}->{restApiDelay} );
+    usleep ( $self->{conf}->{base}->{restApiDelay} );
 
     # Prep the crypto bits.
-    my $secret = decode_base64 ( $self->{conf}->{apiSecret} );
+    my $secret = decode_base64 ( $self->{conf}->{base}->{apiSecret} );
     my $nonce = $self->_getNonce ();
     my $d = Crypt::Mac::HMAC->new('SHA256', $secret);    
     $d->add ( $uriPath );
@@ -60,10 +60,10 @@ sub _standardGet {
 
     # Now that the crypto is finished, prepare a GET call to the
     # endpoint.
-    my $uri = $self->{conf}->{apiBaseUrl} . $uriPath;
+    my $uri = $self->{conf}->{base}->{apiBaseUrl} . $uriPath;
     my $req = HTTP::Request->new ( 'GET', $uri );
     $req->content_type('application/json');
-    $req->header ( 'SHRIMPY-API-KEY' => $self->{conf}->{apiKey} );
+    $req->header ( 'SHRIMPY-API-KEY' => $self->{conf}->{base}->{apiKey} );
     $req->header ( 'SHRIMPY-API-NONCE' => $nonce );
     $req->header ( 'SHRIMPY-API-SIGNATURE' => $hmac );
     
@@ -83,12 +83,26 @@ sub _standardGet {
 sub getAllAccounts {
     my $self = shift;
 
-    my $uriPath = sprintf "%s/%s", $self->{conf}->{apiBasePath}, "accounts";
+    my $uriPath = sprintf "%s/%s", $self->{conf}->{base}->{apiBasePath}, "accounts";
     
     my $rv = $self->_standardGet ( $uriPath );
     
     return $rv;
 }
+
+# GET https://api.shrimpy.io/v1/accounts/<exchangeAccountId>/balance
+
+sub getBalance {
+    my $self = shift;
+    my $account = shift;
+
+    my $uriPath = sprintf "%s/%s/%s/balance", $self->{conf}->{base}->{apiBasePath}, "accounts", $account;
+    
+    my $rv = $self->_standardGet ( $uriPath );
+    
+    return $rv;
+}
+   
 
 # GET https://api.shrimpy.io/v1/<exchange>/ticker
 
