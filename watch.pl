@@ -2,11 +2,15 @@
 
 ### Module Section ###
 
+use lib qw [ . extlib/lib/perl5 ];
 use strict;
 use warnings;
 use Carp;
 use Getopt::Std;
-use lib qw [ . ];
+use JSON;
+use Email::Send;
+use Email::Send::Gmail;
+use Email::Simple::Creator;
 use Config::ShrimpConfig;
 use Shrimpy::ApiWrap;
 
@@ -73,6 +77,80 @@ sub logLine {
 	or confess "Failed to close $logFile from append: $!\n";
 }
 
+sub writeTimeTrackFile {
+    
+    my $trackFile = $conf->{watch}->{cooldownTrack};
+    
+    my $trackRec = { lastEmail => time () };
+    my $jText = to_json ( $trackRec );
+
+    open ( my $WT, '>', $trackFile )
+	or confess "Failed to open $trackFile for write: $!\n";
+
+    print {$WT} "$jText\n";
+
+    close ( $WT )
+	or confess "Failed to close $trackFile from write: $!\n";
+    
+}
+
+sub emailDelay {
+
+    my $trackFile = $conf->{watch}->{cooldownTrack};
+    my $trackRec;
+    
+    if ( -f $trackFile ) {
+
+	my $jText = '';
+	
+	open ( my $RD, '<', $trackFile )
+	    or confess "Failed to open $trackFile for read: $!\n";
+
+	while ( my $line = <$RD> ) {
+	    $jText .= $line;
+	}
+
+	close ( $RD )
+	    or confess "Failed to close $trackFile from read: $!\n";
+
+	$trackRec = from_json ( $jText );
+
+	if ( ( time () -  $trackRec->{lastEmail} )
+	     < ( $conf->{watch}->{cooldown} * 60 ) ) {
+	    # do nothing
+	} else {	    
+	    writeTimeTrackFile ();
+	    sendEmail ();
+	}
+    } else {
+	writeTimeTrackFile ();
+	sendEmail ();
+    }	
+}
+
+sub sendEmail {
+
+    my $email = Email::Simple->create(
+	header => [
+	    From    => $conf->{watch}->{fromEmail},
+	    To      => $conf->{watch}->{toEmail},
+	    Subject => $conf->{watch}->{toEmailSubject},
+	],
+	body => "Time to rebalance your shrimpy.  Difference is up to: $difference\n",
+	);
+    
+    my $sender = Email::Send->new(
+	{   mailer      => 'Gmail',
+	    mailer_args => [
+		username => $conf->{watch}->{fromEmail},
+		password => $conf->{watch}->{fromEmailPass},
+		]
+	}
+	);
+    eval { $sender->send($email) };
+    die "Error sending email: $@" if $@;
+}
+
 ### Main Section ###
 
 $confParse = Config::ShrimpConfig->new ( $opts->{c} );
@@ -112,5 +190,9 @@ foreach my $acc ( sort keys %balTrack ) {
 
 $printLine .= sprintf "Difference is: %f", $difference;
 logLine ( $printLine );
+
+if ( $difference > $conf->{watch}->{maxDiff} ) {
+    emailDelay ();
+}
 
 exit ( 0 );

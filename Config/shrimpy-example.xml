@@ -8,9 +8,9 @@
          call.  This prevents us from calling the API too fast. -->
     <restApiDelay>100000</restApiDelay>
     <!-- Your API key goes in the field below. -->
-    <apiKey>YourApiKeyGoesHere</apiKey>
+    <apiKey>YourKeyGoesHere</apiKey>
     <!-- Your API secret goes in the field below. -->
-    <apiSecret>YourApiSecretGoesHere</apiSecret>
+    <apiSecret>YourSecretGoesHere</apiSecret>
   </base>
   <switch>
     <!-- If the bear profile reaches this threshold, switch to
@@ -31,7 +31,7 @@
     <!-- Comma delimited list of symbols to ignore in the bull analysis. -->
     <bullIgnoreList>USDT</bullIgnoreList>
     <!-- Location of the SQLite data file. -->
-    <dbFile>YourDatabaseFileGoesHere</dbFile>
+    <dbFile>YourDbLocationGoesHere</dbFile>
     <!-- Dump file location, for debugging the database. -->
     <dumpFile>YourDumpFileGoesHere</dumpFile>
     <!-- Short term EMA for Bull/Bear analysis. -->
@@ -51,17 +51,29 @@
     <debugMode>1</debugMode>
   </switch>
   <watch>
-    <!-- Comma delimited list of portfolios to watch. -->
+    <!-- Comma delimited list of portfolios to watch. (Currently not
+         used...) -->
     <portfolios>binance-bull-auto,binance-bear-auto</portfolios>
     <!-- Max percent before notifing. -->
-    <maxdiff>1</maxdiff>
+    <maxDiff>1</maxDiff>
     <!-- Time to wait in minutes before sending another notice. -->
     <cooldown>60</cooldown>
+    <!-- File where we track when we last sent email about rebalancing. -->
+    <cooldownTrack>trackLastEmail.json</cooldownTrack>
     <!-- Email address to send the notification. -->
-    <email>YourEmailGoesHere</email>
+    <toEmail>YourEmailToGoesHere</toEmail>
+    <!-- Subject for the reblance email -->
+    <toEmailSubject>Rebalance Shrimpy Now</toEmailSubject>
+    <!-- From email for the notification. -->
+    <fromEmail>YourFromEmailGoesHere</fromEmail>
+    <!-- Password for the account used for notification. -->
+    <fromEmailPass>YourFromEmailPasswordGoesHere</fromEmailPass>
   </watch>
   <logging>
-    <logDir>YourLogDirGoesHere</logDir>
+    <!-- Location for your log files. -->
+    <logDir>YourLogFilesGoHere</logDir>
+    <!-- Prefix for the log files.  A datestamp will be appended to
+         this name. -->
     <logPrefix>watchLog</logPrefix>
   </logging>
 </config>
