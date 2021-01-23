@@ -13,6 +13,7 @@ use Email::Send::Gmail;
 use Email::Simple::Creator;
 use Config::ShrimpConfig;
 use Shrimpy::ApiWrap;
+use Data::Dumper;
 
 ### Global Variable Section ###
 
@@ -160,7 +161,14 @@ $shrimpy = Shrimpy::ApiWrap->new ( $conf );
 $accounts = $shrimpy->getAllAccounts ();
 
 foreach my $acc ( @{$accounts} ) {
-    
+
+    # For now, this tool only supports one active exchange at a time.
+    if ( $acc->{exchange} ne $conf->{watch}->{activeExchange} ) {
+	next;
+    }
+
+    # print Dumper ( $acc ) . "\n";
+
     my $balList = $shrimpy->getBalance ( $acc->{id} );
     
     foreach my $coin ( @{$balList->{balances}} ) {
